@@ -1,0 +1,108 @@
+:root {
+    --bg-color: #1e1e1e;
+    --panel-color: #2c2c2c;
+    --accent: #3cce56;
+    --text: #ffffff;
+    --grid-line: #444;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    width: 95%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    height: 95vh;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 2px solid var(--grid-line);
+}
+
+.controls-top select, button {
+    padding: 10px;
+    background: var(--panel-color);
+    color: white;
+    border: 1px solid #555;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.download-btn {
+    background-color: var(--accent);
+    color: #000;
+    font-weight: bold;
+}
+
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: #252525;
+    padding: 15px;
+    margin-top: 10px;
+    border-radius: 8px;
+}
+
+#progressBar {
+    flex-grow: 1;
+    cursor: pointer;
+}
+
+.sequencer-wrapper {
+    flex-grow: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    margin-top: 20px;
+    background: #111;
+    border: 1px solid var(--grid-line);
+    position: relative;
+}
+
+.sequencer {
+    display: grid;
+    /* 25 pitches (0-24) rows, dynamic columns */
+    grid-template-rows: repeat(25, 30px); 
+    position: relative;
+}
+
+.grid-cell {
+    border-right: 1px solid #333;
+    border-bottom: 1px solid #333;
+    position: relative;
+    cursor: pointer;
+}
+
+.grid-cell:hover {
+    background-color: #2a2a2a;
+}
+
+.note-block {
+    position: absolute;
+    height: 26px;
+    width: 90%;
+    top: 2px;
+    left: 2px;
+    background-color: var(--accent);
+    border-radius: 3px;
+    box-shadow: 0 0 5px rgba(60, 206, 86, 0.5);
+    pointer-events: none; /* Let clicks pass to cell for removal */
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
