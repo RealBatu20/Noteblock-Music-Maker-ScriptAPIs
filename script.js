@@ -1,109 +1,143 @@
-// Configuration
-const TICKS_PER_SECOND = 20; // Minecraft runs at 20 ticks/sec
-const NOTES_COUNT = 25; // 2 Octaves (0 - 24)
-const TOTAL_TICKS = 200; // Length of the song in ticks (10 seconds default)
+/**
+ * Configuration
+ */
+const CONFIG = {
+    ticksPerSecond: 20,
+    totalTicks: 400, // 20 seconds
+    pitchRange: 25   // 0 to 24
+};
 
-// State
-let songData = []; // Array of { tick, pitch, instrument }
+// Instrument Mapping (Index -> Name)
+const INSTRUMENTS = ['harp', 'bass', 'guitar', 'banjo', 'pling'];
+const INSTRUMENT_COLORS = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0'];
+
+/**
+ * App State
+ */
+let songData = []; // Format: { tick: int, inst: int, pitch: int }
 let isPlaying = false;
 let currentTick = 0;
 let playbackInterval = null;
-let speed = 1.0;
-let currentInstrument = 'harp';
+let selectedInstrument = 0; // Index 0-4
 
 // DOM Elements
 const sequencer = document.getElementById('sequencer');
+const keyContainer = document.querySelector('.piano-roll-keys');
 const progressBar = document.getElementById('progressBar');
 const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
-const speedInput = document.getElementById('speedInput');
 
-// Init
+/**
+ * Initialization
+ */
 function init() {
     renderGrid();
-    setupEventListeners();
+    setupListeners();
     updateTimeDisplay();
 }
 
-// 1. Render the Sequencer Grid
+/**
+ * Render the Grid
+ */
 function renderGrid() {
-    sequencer.style.gridTemplateColumns = `repeat(${TOTAL_TICKS}, 30px)`;
-    sequencer.innerHTML = '';
+    // Set CSS Grid dimensions
+    sequencer.style.display = 'grid';
+    sequencer.style.gridTemplateColumns = `repeat(${CONFIG.totalTicks}, 30px)`;
+    sequencer.style.gridTemplateRows = `repeat(${CONFIG.pitchRange}, 24px)`;
 
-    for (let pitch = 24; pitch >= 0; pitch--) {
-        for (let tick = 0; tick < TOTAL_TICKS; tick++) {
+    // 1. Generate Rows (High pitch at top, Low at bottom)
+    for (let pitch = CONFIG.pitchRange - 1; pitch >= 0; pitch--) {
+        
+        // Key Label (Left Sidebar)
+        const key = document.createElement('div');
+        key.className = 'key-label';
+        key.innerText = pitch;
+        keyContainer.appendChild(key);
+
+        // Grid Cells
+        for (let tick = 0; tick < CONFIG.totalTicks; tick++) {
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
             cell.dataset.tick = tick;
             cell.dataset.pitch = pitch;
             
-            // Toggle Note on Click
-            cell.addEventListener('click', () => toggleNote(tick, pitch, cell));
+            cell.addEventListener('mousedown', () => toggleNote(tick, pitch, cell));
             sequencer.appendChild(cell);
         }
     }
 }
 
-// 2. Logic: Toggle Note
+/**
+ * Toggle Note Logic
+ */
 function toggleNote(tick, pitch, cell) {
     const existingIndex = songData.findIndex(n => n.tick === tick && n.pitch === pitch);
-    
+
     if (existingIndex > -1) {
         // Remove Note
         songData.splice(existingIndex, 1);
         cell.innerHTML = '';
     } else {
         // Add Note
-        songData.push({ tick, pitch, instrument: currentInstrument });
-        const noteDiv = document.createElement('div');
-        noteDiv.className = 'note-block';
+        songData.push({ tick, pitch, inst: selectedInstrument });
         
-        // Color code based on instrument
-        if(currentInstrument === 'bass') noteDiv.style.backgroundColor = '#d35400';
-        if(currentInstrument === 'pling') noteDiv.style.backgroundColor = '#8e44ad';
-        
-        cell.appendChild(noteDiv);
-        playPreviewSound(currentInstrument, pitch);
+        const marker = document.createElement('div');
+        marker.className = 'note-marker';
+        marker.style.backgroundColor = INSTRUMENT_COLORS[selectedInstrument];
+        marker.style.color = INSTRUMENT_COLORS[selectedInstrument]; // For shadow
+        cell.appendChild(marker);
+
+        playPreviewSound(selectedInstrument, pitch);
     }
 }
 
-// 3. Audio: Play Sound in Browser
-function playPreviewSound(instrument, pitchIndex) {
-    // Minecraft pitch math: 2^((pitchIndex - 12) / 12)
-    // Assuming you have files 0.ogg to 24.ogg or similar logic. 
-    // Here we assume mapping specific folders.
-    
-    // In a real scenario, use new Audio(`noteblock/${instrument}/${pitchIndex}.ogg`).play();
-    // Since we don't have files, we log:
-    console.log(`🎵 Playing: ${instrument} at pitch index ${pitchIndex}`);
+/**
+ * Audio Preview (Browser Side)
+ */
+function playPreviewSound(instIndex, pitch) {
+    const instName = INSTRUMENTS[instIndex];
+    // In a real deployed folder, path would be: noteblock/harp/12.ogg
+    // Ensure files exist, or this will 404
+    const audio = new Audio(`noteblock/${instName}/${pitch}.ogg`);
+    audio.volume = 0.5;
+    audio.play().catch(e => console.log("Audio file missing in dev mode"));
 }
 
-// 4. Playback Logic
+/**
+ * Playback Logic
+ */
+function togglePlay() {
+    if (isPlaying) pause(); else play();
+}
+
 function play() {
-    if (isPlaying) return;
     isPlaying = true;
-    const tickRate = (1000 / TICKS_PER_SECOND) / speed;
+    const speed = parseFloat(document.getElementById('speedInput').value) || 1.0;
+    const msPerTick = (1000 / CONFIG.ticksPerSecond) / speed;
 
     playbackInterval = setInterval(() => {
-        if (currentTick >= TOTAL_TICKS) {
-            if (document.getElementById('repeatCheckbox').checked) {
-                currentTick = 0;
-            } else {
-                stop();
-                return;
-            }
+        if (currentTick >= CONFIG.totalTicks) {
+            stop();
+            return;
         }
 
-        // Find notes at current tick
+        // Play notes at current tick
         const notes = songData.filter(n => n.tick === currentTick);
-        notes.forEach(n => playPreviewSound(n.instrument, n.pitch));
+        notes.forEach(n => playPreviewSound(n.inst, n.pitch));
 
-        // Update UI
-        progressBar.value = (currentTick / TOTAL_TICKS) * 100;
+        // UI Updates
+        progressBar.value = (currentTick / CONFIG.totalTicks) * 100;
         updateTimeDisplay();
+        
+        // Auto scroll
+        if(currentTick % 20 === 0) {
+            const cellWidth = 30;
+            document.querySelector('.grid-scroll-area').scrollLeft = (currentTick * cellWidth) - 100;
+        }
 
         currentTick++;
-    }, tickRate);
+
+    }, msPerTick);
 }
 
 function pause() {
@@ -118,133 +152,87 @@ function stop() {
     updateTimeDisplay();
 }
 
+/**
+ * Utils
+ */
 function updateTimeDisplay() {
     const curSec = Math.floor(currentTick / 20);
-    const totSec = Math.floor(TOTAL_TICKS / 20);
-    currentTimeEl.textContent = formatTime(curSec);
-    totalTimeEl.textContent = formatTime(totSec);
+    const totSec = Math.floor(CONFIG.totalTicks / 20);
+    currentTimeEl.textContent = `${Math.floor(curSec/60)}:${(curSec%60).toString().padStart(2,'0')}`;
+    totalTimeEl.textContent = `${Math.floor(totSec/60)}:${(totSec%60).toString().padStart(2,'0')}`;
 }
 
-function formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// 5. Event Listeners
-function setupEventListeners() {
+function setupListeners() {
     document.getElementById('playBtn').addEventListener('click', play);
     document.getElementById('pauseBtn').addEventListener('click', pause);
     document.getElementById('stopBtn').addEventListener('click', stop);
+    document.getElementById('instrumentSelect').addEventListener('change', (e) => selectedInstrument = parseInt(e.target.value));
     
-    document.getElementById('instrumentSelect').addEventListener('change', (e) => {
-        currentInstrument = e.target.value;
-    });
-
-    speedInput.addEventListener('change', (e) => {
-        speed = parseFloat(e.target.value);
-        if(isPlaying) { pause(); play(); } // Restart to apply speed
-    });
-
-    progressBar.addEventListener('input', (e) => {
-        currentTick = Math.floor((e.target.value / 100) * TOTAL_TICKS);
+    document.getElementById('progressBar').addEventListener('input', (e) => {
+        currentTick = Math.floor((e.target.value / 100) * CONFIG.totalTicks);
         updateTimeDisplay();
     });
 
-    document.getElementById('downloadBtn').addEventListener('click', generateBedrockScript);
+    document.getElementById('downloadBtn').addEventListener('click', generateApiFile);
 }
 
-// =======================================================
-// 6. GENERATE MINECRAFT BEDROCK SCRIPT (The Core Req)
-// =======================================================
-function generateBedrockScript() {
-    const fileId = Math.floor(Math.random() * 1000) + 1;
-    const fileName = `music${fileId}.js`;
-
-    // Map instruments to Minecraft Sound IDs
-    const mcInstruments = {
-        'harp': 'note.harp',
-        'bass': 'note.bass',
-        'guitar': 'note.guitar',
-        'banjo': 'note.banjo',
-        'pling': 'note.pling'
-    };
-
-    // Calculate Minecraft Pitch (0.5 to 2.0 range) based on 0-24 index
-    // F#3 is roughly 0.5, F#5 is 2.0. Center is F#4 (index 12) = 1.0
-    const notesCode = songData.map(note => {
-        const mcPitch = Math.pow(2, (note.pitch - 12) / 12);
-        return `{ tick: ${note.tick}, sound: "${mcInstruments[note.instrument]}", pitch: ${mcPitch.toFixed(2)} }`;
-    }).join(',\n    ');
-
-    const scriptContent = `
 /**
- * ${fileName}
- * Generated by AI Web Composer
- * 
- * INSTRUCTIONS:
- * 1. Place this file in your behavior pack scripts folder.
- * 2. In game, run: /scriptevent music:play ${fileId}
+ * =========================================================
+ *  API GENERATOR (Generates music<number>.js)
+ * =========================================================
+ */
+function generateApiFile() {
+    const fileId = Math.floor(Math.random() * 900) + 100; // Random ID (100-999)
+    const filename = `music${fileId}.js`;
+    const speed = document.getElementById('speedInput').value;
+
+    // Sort data by tick for optimization
+    songData.sort((a, b) => a.tick - b.tick);
+
+    // Convert internal object format to Compact API Array Format
+    // Format: [tick, instrumentIndex, pitchIndex]
+    // Example: [0, 0, 12] -> Tick 0, Harp, Pitch 12
+    const dataString = songData.map(n => `[${n.tick},${n.inst},${n.pitch}]`).join(',');
+
+    const fileContent = `/**
+ * Bedrock Music API - Track ${fileId}
+ * Generated via Web Composer
  */
 
-import { world, system } from "@minecraft/server";
-
-const songData = [
-    ${notesCode}
-];
-
-const SONG_ID = ${fileId};
-const TOTAL_TICKS = ${TOTAL_TICKS};
-
-// Listen for the slash command
-system.afterEvents.scriptEventReceive.subscribe((event) => {
-    if (event.id === "music:play" && event.message === "${fileId}") {
-        const player = event.sourceEntity;
-        if (!player) return;
-        
-        world.sendMessage(\`§aPlaying music track ${fileId}...\`);
-        playSong(player);
-    }
-});
-
-function playSong(entity) {
-    let currentTick = 0;
+export const Music${fileId} = {
+    id: ${fileId},
+    speed: ${speed},
+    instruments: ["note.harp", "note.bass", "note.guitar", "note.banjo", "note.pling"],
     
-    const runId = system.runInterval(() => {
-        if (currentTick >= TOTAL_TICKS) {
-            system.clearRun(runId);
-            world.sendMessage("§eMusic finished.");
-            return;
-        }
+    // Data Format: [tick, instrument_index, pitch_index(0-24)]
+    data: [${dataString}],
 
-        // Find notes for this tick
-        const notes = songData.filter(n => n.tick === currentTick);
-        
-        for (const note of notes) {
-            entity.dimension.playSound(note.sound, entity.location, {
-                pitch: note.pitch,
-                volume: 1.0
-            });
-        }
+    /**
+     * Helper to get playable data for a specific tick
+     * @param {number} currentTick
+     */
+    getNotesAt(currentTick) {
+        return this.data.filter(n => n[0] === currentTick).map(n => {
+            return {
+                sound: this.instruments[n[1]],
+                pitch: Math.pow(2, (n[2] - 12) / 12) // Convert index to Bedrock float pitch
+            };
+        });
+    }
+};`;
 
-        currentTick++;
-    }, 1); // Run every tick
-}
-`;
-
-    downloadFile(fileName, scriptContent);
+    download(filename, fileContent);
 }
 
-function downloadFile(name, content) {
-    const blob = new Blob([content], { type: 'text/javascript' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+function download(filename, text) {
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/javascript;charset=utf-8,' + encodeURIComponent(text));
+    element.setAttribute('download', filename);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
 }
 
-// Start
+// Run
 init();
