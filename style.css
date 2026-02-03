@@ -1,108 +1,136 @@
 :root {
-    --bg-color: #1e1e1e;
-    --panel-color: #2c2c2c;
-    --accent: #3cce56;
-    --text: #ffffff;
-    --grid-line: #444;
+    --bg: #121212;
+    --panel: #1e1e1e;
+    --border: #333;
+    --accent: #00bcd4;
+    --text: #e0e0e0;
+    --cell-w: 30px;
+    --cell-h: 24px;
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: var(--bg-color);
+    background-color: var(--bg);
     color: var(--text);
+    font-family: 'Consolas', 'Courier New', monospace;
     margin: 0;
+    height: 100vh;
     display: flex;
     justify-content: center;
-    height: 100vh;
-    overflow: hidden;
 }
 
 .container {
-    width: 95%;
-    max-width: 1200px;
+    width: 98%;
+    height: 98vh;
     display: flex;
     flex-direction: column;
-    height: 95vh;
 }
 
 header {
+    background: var(--panel);
+    padding: 15px;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 0;
-    border-bottom: 2px solid var(--grid-line);
 }
 
-.controls-top select, button {
-    padding: 10px;
-    background: var(--panel-color);
+.brand h1 { margin: 0; font-size: 1.5rem; color: var(--accent); }
+.badge { font-size: 0.8rem; background: #333; padding: 2px 6px; border-radius: 4px; }
+
+.controls-main { display: flex; gap: 15px; align-items: flex-end; }
+.control-group { display: flex; flex-direction: column; font-size: 0.8rem; color: #888; }
+
+select, input[type="number"] {
+    background: #2a2a2a;
+    border: 1px solid #444;
     color: white;
-    border: 1px solid #555;
-    cursor: pointer;
-    border-radius: 4px;
+    padding: 5px;
+    margin-top: 5px;
+    font-family: inherit;
 }
 
-.download-btn {
-    background-color: var(--accent);
+.btn-primary {
+    background: var(--accent);
     color: #000;
+    border: none;
+    padding: 8px 16px;
     font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
 }
 
-.playback-controls {
+.playback-bar {
+    background: #252525;
+    padding: 10px;
     display: flex;
     align-items: center;
-    gap: 15px;
-    background: #252525;
-    padding: 15px;
-    margin-top: 10px;
-    border-radius: 8px;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
 }
 
-#progressBar {
-    flex-grow: 1;
+.btn-icon {
+    background: #333;
+    border: none;
+    color: white;
+    width: 35px;
+    height: 35px;
+    border-radius: 4px;
     cursor: pointer;
 }
 
-.sequencer-wrapper {
+.progress-container { flex-grow: 1; display: flex; align-items: center; gap: 10px; }
+input[type="range"] { flex-grow: 1; cursor: pointer; }
+
+/* Sequencer */
+.sequencer-container {
+    display: flex;
     flex-grow: 1;
-    overflow-y: auto;
-    overflow-x: auto;
-    margin-top: 20px;
-    background: #111;
-    border: 1px solid var(--grid-line);
+    overflow: hidden;
+    position: relative;
+}
+
+.piano-roll-keys {
+    width: 50px;
+    background: #222;
+    border-right: 1px solid var(--border);
+    z-index: 2;
+}
+
+.key-label {
+    height: var(--cell-h);
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: #666;
+}
+
+.grid-scroll-area {
+    overflow: auto;
+    flex-grow: 1;
+    background: #181818;
     position: relative;
 }
 
 .sequencer {
-    display: grid;
-    /* 25 pitches (0-24) rows, dynamic columns */
-    grid-template-rows: repeat(25, 30px); 
     position: relative;
+    /* Grid set in JS */
 }
 
 .grid-cell {
-    border-right: 1px solid #333;
-    border-bottom: 1px solid #333;
+    border-right: 1px solid #2a2a2a;
+    border-bottom: 1px solid #2a2a2a;
+    box-sizing: border-box;
     position: relative;
-    cursor: pointer;
 }
 
-.grid-cell:hover {
-    background-color: #2a2a2a;
-}
+.grid-cell:nth-child(4n) { border-right: 1px solid #444; } /* Beat marker */
 
-.note-block {
+.note-marker {
     position: absolute;
-    height: 26px;
-    width: 90%;
-    top: 2px;
-    left: 2px;
-    background-color: var(--accent);
-    border-radius: 3px;
-    box-shadow: 0 0 5px rgba(60, 206, 86, 0.5);
-    pointer-events: none; /* Let clicks pass to cell for removal */
+    top: 2px; left: 2px; right: 2px; bottom: 2px;
+    border-radius: 2px;
+    pointer-events: none;
+    box-shadow: 0 0 5px currentColor;
 }
-
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #555; border-radius: 5px; }
