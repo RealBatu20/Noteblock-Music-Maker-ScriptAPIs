@@ -7,25 +7,26 @@ const CONFIG = {
     pitchRange: 25   // 0 to 24
 };
 
-// Instrument Mapping (Index -> Name)
 const INSTRUMENTS = ['harp', 'bass', 'guitar', 'banjo', 'pling'];
 const INSTRUMENT_COLORS = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0'];
 
 /**
  * App State
  */
-let songData = []; // Format: { tick: int, inst: int, pitch: int }
+let songData = []; // { tick, inst, pitch }
 let isPlaying = false;
 let currentTick = 0;
-let playbackInterval = null;
-let selectedInstrument = 0; // Index 0-4
+let playbackInterval = null; // Stores the Interval ID
+let selectedInstrument = 0;
 
 // DOM Elements
-const sequencer = document.getElementById('sequencer');
-const keyContainer = document.querySelector('.piano-roll-keys');
+const sequencerGrid = document.getElementById('sequencerGrid');
 const progressBar = document.getElementById('progressBar');
 const currentTimeEl = document.getElementById('currentTime');
 const totalTimeEl = document.getElementById('totalTime');
+const playHead = document.createElement('div'); 
+
+playHead.className = 'play-head';
 
 /**
  * Initialization
@@ -37,32 +38,45 @@ function init() {
 }
 
 /**
- * Render the Grid
+ * Render the Grid with Sticky Keys
  */
 function renderGrid() {
-    // Set CSS Grid dimensions
-    sequencer.style.display = 'grid';
-    sequencer.style.gridTemplateColumns = `repeat(${CONFIG.totalTicks}, 30px)`;
-    sequencer.style.gridTemplateRows = `repeat(${CONFIG.pitchRange}, 24px)`;
+    // 1. Setup Grid Layout
+    sequencerGrid.style.gridTemplateColumns = `40px repeat(${CONFIG.totalTicks}, 35px)`; // Key col + Ticks
+    sequencerGrid.style.gridTemplateRows = `repeat(${CONFIG.pitchRange}, 28px)`;
+    
+    // 2. Add Playhead
+    sequencerGrid.appendChild(playHead);
 
-    // 1. Generate Rows (High pitch at top, Low at bottom)
+    // 3. Build Cells
     for (let pitch = CONFIG.pitchRange - 1; pitch >= 0; pitch--) {
         
-        // Key Label (Left Sidebar)
+        // Sticky Key Label (Column 1)
         const key = document.createElement('div');
         key.className = 'key-label';
         key.innerText = pitch;
-        keyContainer.appendChild(key);
+        key.style.gridRow = CONFIG.pitchRange - pitch; // Reverse row order visually
+        key.style.gridColumn = 1;
+        sequencerGrid.appendChild(key);
 
-        // Grid Cells
+        // Note Cells (Columns 2 to N)
         for (let tick = 0; tick < CONFIG.totalTicks; tick++) {
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
+            if (tick % 4 === 0) cell.classList.add('beat-mark'); // Visual guide
+            
+            // Grid Positioning
+            cell.style.gridRow = CONFIG.pitchRange - pitch;
+            cell.style.gridColumn = tick + 2; // Offset by 1 for key column
+            
+            // Data Attributes for Click Logic
             cell.dataset.tick = tick;
             cell.dataset.pitch = pitch;
+
+            // Touch/Click Listener
+            cell.addEventListener('click', () => toggleNote(tick, pitch, cell));
             
-            cell.addEventListener('mousedown', () => toggleNote(tick, pitch, cell));
-            sequencer.appendChild(cell);
+            sequencerGrid.appendChild(cell);
         }
     }
 }
@@ -74,17 +88,17 @@ function toggleNote(tick, pitch, cell) {
     const existingIndex = songData.findIndex(n => n.tick === tick && n.pitch === pitch);
 
     if (existingIndex > -1) {
-        // Remove Note
+        // Remove
         songData.splice(existingIndex, 1);
         cell.innerHTML = '';
     } else {
-        // Add Note
+        // Add
         songData.push({ tick, pitch, inst: selectedInstrument });
         
         const marker = document.createElement('div');
         marker.className = 'note-marker';
         marker.style.backgroundColor = INSTRUMENT_COLORS[selectedInstrument];
-        marker.style.color = INSTRUMENT_COLORS[selectedInstrument]; // For shadow
+        marker.style.color = INSTRUMENT_COLORS[selectedInstrument];
         cell.appendChild(marker);
 
         playPreviewSound(selectedInstrument, pitch);
@@ -92,25 +106,25 @@ function toggleNote(tick, pitch, cell) {
 }
 
 /**
- * Audio Preview (Browser Side)
+ * Audio Preview
  */
 function playPreviewSound(instIndex, pitch) {
     const instName = INSTRUMENTS[instIndex];
-    // In a real deployed folder, path would be: noteblock/harp/12.ogg
-    // Ensure files exist, or this will 404
+    // Path: noteblock/harp/12.ogg
     const audio = new Audio(`noteblock/${instName}/${pitch}.ogg`);
     audio.volume = 0.5;
-    audio.play().catch(e => console.log("Audio file missing in dev mode"));
+    audio.play().catch(e => { /* Ignore errors if file missing in dev */ });
 }
 
 /**
- * Playback Logic
+ * =========================================
+ *  PLAYBACK LOGIC (Fixed)
+ * =========================================
  */
-function togglePlay() {
-    if (isPlaying) pause(); else play();
-}
 
 function play() {
+    if (isPlaying) return; // Prevent multiple loops
+    
     isPlaying = true;
     const speed = parseFloat(document.getElementById('speedInput').value) || 1.0;
     const msPerTick = (1000 / CONFIG.ticksPerSecond) / speed;
@@ -121,19 +135,13 @@ function play() {
             return;
         }
 
-        // Play notes at current tick
+        // Play notes
         const notes = songData.filter(n => n.tick === currentTick);
         notes.forEach(n => playPreviewSound(n.inst, n.pitch));
 
-        // UI Updates
-        progressBar.value = (currentTick / CONFIG.totalTicks) * 100;
+        // Update UI
+        updatePlayHead();
         updateTimeDisplay();
-        
-        // Auto scroll
-        if(currentTick % 20 === 0) {
-            const cellWidth = 30;
-            document.querySelector('.grid-scroll-area').scrollLeft = (currentTick * cellWidth) - 100;
-        }
 
         currentTick++;
 
@@ -141,83 +149,103 @@ function play() {
 }
 
 function pause() {
+    if (!isPlaying) return;
+    
     isPlaying = false;
-    clearInterval(playbackInterval);
+    if (playbackInterval) {
+        clearInterval(playbackInterval);
+        playbackInterval = null;
+    }
 }
 
 function stop() {
-    pause();
+    pause(); // Stop interval first
     currentTick = 0;
-    progressBar.value = 0;
+    updatePlayHead();
     updateTimeDisplay();
 }
 
-/**
- * Utils
- */
+function updatePlayHead() {
+    // 40px is key width, 35px is cell width
+    const leftPos = 40 + (currentTick * 35);
+    playHead.style.left = `${leftPos}px`;
+    
+    // Auto Scroll Logic
+    const viewport = document.querySelector('.sequencer-viewport');
+    if (leftPos > viewport.scrollLeft + viewport.clientWidth || leftPos < viewport.scrollLeft) {
+        viewport.scrollLeft = leftPos - 100;
+    }
+
+    // Progress Bar
+    progressBar.value = (currentTick / CONFIG.totalTicks) * 100;
+}
+
 function updateTimeDisplay() {
     const curSec = Math.floor(currentTick / 20);
     const totSec = Math.floor(CONFIG.totalTicks / 20);
-    currentTimeEl.textContent = `${Math.floor(curSec/60)}:${(curSec%60).toString().padStart(2,'0')}`;
-    totalTimeEl.textContent = `${Math.floor(totSec/60)}:${(totSec%60).toString().padStart(2,'0')}`;
+    currentTimeEl.textContent = formatTime(curSec);
+    totalTimeEl.textContent = formatTime(totSec);
 }
 
+function formatTime(s) {
+    return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+}
+
+/**
+ * Listeners
+ */
 function setupListeners() {
     document.getElementById('playBtn').addEventListener('click', play);
     document.getElementById('pauseBtn').addEventListener('click', pause);
     document.getElementById('stopBtn').addEventListener('click', stop);
-    document.getElementById('instrumentSelect').addEventListener('change', (e) => selectedInstrument = parseInt(e.target.value));
     
-    document.getElementById('progressBar').addEventListener('input', (e) => {
+    document.getElementById('instrumentSelect').addEventListener('change', (e) => {
+        selectedInstrument = parseInt(e.target.value);
+    });
+
+    // Scrubber
+    progressBar.addEventListener('input', (e) => {
+        const wasPlaying = isPlaying;
+        if(wasPlaying) pause();
+        
         currentTick = Math.floor((e.target.value / 100) * CONFIG.totalTicks);
+        updatePlayHead();
         updateTimeDisplay();
+        
+        if(wasPlaying) play();
     });
 
     document.getElementById('downloadBtn').addEventListener('click', generateApiFile);
 }
 
 /**
- * =========================================================
- *  API GENERATOR (Generates music<number>.js)
- * =========================================================
+ * =========================================
+ *  API GENERATOR
+ * =========================================
  */
 function generateApiFile() {
-    const fileId = Math.floor(Math.random() * 900) + 100; // Random ID (100-999)
+    const fileId = Math.floor(Math.random() * 900) + 100;
     const filename = `music${fileId}.js`;
     const speed = document.getElementById('speedInput').value;
 
-    // Sort data by tick for optimization
     songData.sort((a, b) => a.tick - b.tick);
 
-    // Convert internal object format to Compact API Array Format
     // Format: [tick, instrumentIndex, pitchIndex]
-    // Example: [0, 0, 12] -> Tick 0, Harp, Pitch 12
     const dataString = songData.map(n => `[${n.tick},${n.inst},${n.pitch}]`).join(',');
 
     const fileContent = `/**
  * Bedrock Music API - Track ${fileId}
- * Generated via Web Composer
  */
-
 export const Music${fileId} = {
     id: ${fileId},
     speed: ${speed},
     instruments: ["note.harp", "note.bass", "note.guitar", "note.banjo", "note.pling"],
-    
-    // Data Format: [tick, instrument_index, pitch_index(0-24)]
     data: [${dataString}],
-
-    /**
-     * Helper to get playable data for a specific tick
-     * @param {number} currentTick
-     */
-    getNotesAt(currentTick) {
-        return this.data.filter(n => n[0] === currentTick).map(n => {
-            return {
-                sound: this.instruments[n[1]],
-                pitch: Math.pow(2, (n[2] - 12) / 12) // Convert index to Bedrock float pitch
-            };
-        });
+    getNotesAt(tick) {
+        return this.data.filter(n => n[0] === tick).map(n => ({
+            sound: this.instruments[n[1]],
+            pitch: Math.pow(2, (n[2] - 12) / 12)
+        }));
     }
 };`;
 
@@ -228,11 +256,10 @@ function download(filename, text) {
     const element = document.createElement('a');
     element.setAttribute('href', 'data:text/javascript;charset=utf-8,' + encodeURIComponent(text));
     element.setAttribute('download', filename);
-    element.style.display = 'none';
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
 }
 
-// Run
+// Start
 init();
