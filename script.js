@@ -3,131 +3,106 @@
  */
 const CONFIG = {
     ticksPerSecond: 20,
-    totalTicks: 400, // 20 seconds
-    pitchRange: 25   // 0 to 24
+    totalTicks: 400, // 20 Seconds
+    pitchRange: 25   // 0 - 24
 };
 
+const COLORS = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0'];
 const INSTRUMENTS = ['harp', 'bass', 'guitar', 'banjo', 'pling'];
-const INSTRUMENT_COLORS = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0'];
 
 /**
- * App State
+ * State
  */
-let songData = []; // { tick, inst, pitch }
+let songData = []; // Array of { tick, inst, pitch }
 let isPlaying = false;
 let currentTick = 0;
-let playbackInterval = null; // Stores the Interval ID
-let selectedInstrument = 0;
+let playbackInterval = null;
+let selectedInst = 0;
 
-// DOM Elements
-const sequencerGrid = document.getElementById('sequencerGrid');
-const progressBar = document.getElementById('progressBar');
-const currentTimeEl = document.getElementById('currentTime');
-const totalTimeEl = document.getElementById('totalTime');
-const playHead = document.createElement('div'); 
-
-playHead.className = 'play-head';
+// DOM
+const grid = document.getElementById('sequencerGrid');
+const playhead = document.createElement('div'); playhead.className = 'playhead';
+const timeCurrent = document.getElementById('currentTime');
+const timeTotal = document.getElementById('totalTime');
+const progress = document.getElementById('progressBar');
 
 /**
- * Initialization
+ * Init
  */
 function init() {
     renderGrid();
     setupListeners();
-    updateTimeDisplay();
+    updateTime();
 }
 
 /**
- * Render the Grid with Sticky Keys
+ * Render Grid
  */
 function renderGrid() {
-    // 1. Setup Grid Layout
-    sequencerGrid.style.gridTemplateColumns = `40px repeat(${CONFIG.totalTicks}, 35px)`; // Key col + Ticks
-    sequencerGrid.style.gridTemplateRows = `repeat(${CONFIG.pitchRange}, 28px)`;
+    // 40px Key Column + Ticks Columns
+    grid.style.gridTemplateColumns = `40px repeat(${CONFIG.totalTicks}, 35px)`;
+    grid.style.gridTemplateRows = `repeat(${CONFIG.pitchRange}, 28px)`;
     
-    // 2. Add Playhead
-    sequencerGrid.appendChild(playHead);
+    grid.appendChild(playhead);
 
-    // 3. Build Cells
     for (let pitch = CONFIG.pitchRange - 1; pitch >= 0; pitch--) {
-        
-        // Sticky Key Label (Column 1)
+        // Sticky Key
         const key = document.createElement('div');
         key.className = 'key-label';
         key.innerText = pitch;
-        key.style.gridRow = CONFIG.pitchRange - pitch; // Reverse row order visually
         key.style.gridColumn = 1;
-        sequencerGrid.appendChild(key);
+        key.style.gridRow = CONFIG.pitchRange - pitch;
+        grid.appendChild(key);
 
-        // Note Cells (Columns 2 to N)
+        // Cells
         for (let tick = 0; tick < CONFIG.totalTicks; tick++) {
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
-            if (tick % 4 === 0) cell.classList.add('beat-mark'); // Visual guide
+            if (tick % 4 === 0) cell.classList.add('beat');
             
-            // Grid Positioning
+            cell.style.gridColumn = tick + 2;
             cell.style.gridRow = CONFIG.pitchRange - pitch;
-            cell.style.gridColumn = tick + 2; // Offset by 1 for key column
             
-            // Data Attributes for Click Logic
-            cell.dataset.tick = tick;
-            cell.dataset.pitch = pitch;
-
-            // Touch/Click Listener
-            cell.addEventListener('click', () => toggleNote(tick, pitch, cell));
-            
-            sequencerGrid.appendChild(cell);
+            cell.onclick = () => toggleNote(tick, pitch, cell);
+            grid.appendChild(cell);
         }
     }
 }
 
 /**
- * Toggle Note Logic
+ * Note Logic
  */
 function toggleNote(tick, pitch, cell) {
-    const existingIndex = songData.findIndex(n => n.tick === tick && n.pitch === pitch);
-
-    if (existingIndex > -1) {
-        // Remove
-        songData.splice(existingIndex, 1);
+    const index = songData.findIndex(n => n.tick === tick && n.pitch === pitch);
+    
+    if (index > -1) {
+        songData.splice(index, 1);
         cell.innerHTML = '';
     } else {
-        // Add
-        songData.push({ tick, pitch, inst: selectedInstrument });
-        
-        const marker = document.createElement('div');
-        marker.className = 'note-marker';
-        marker.style.backgroundColor = INSTRUMENT_COLORS[selectedInstrument];
-        marker.style.color = INSTRUMENT_COLORS[selectedInstrument];
-        cell.appendChild(marker);
-
-        playPreviewSound(selectedInstrument, pitch);
+        songData.push({ tick, pitch, inst: selectedInst });
+        const note = document.createElement('div');
+        note.className = 'note';
+        note.style.backgroundColor = COLORS[selectedInst];
+        note.style.color = COLORS[selectedInst];
+        cell.appendChild(note);
+        playPreview(selectedInst, pitch);
     }
 }
 
-/**
- * Audio Preview
- */
-function playPreviewSound(instIndex, pitch) {
-    const instName = INSTRUMENTS[instIndex];
-    // Path: noteblock/harp/12.ogg
-    const audio = new Audio(`noteblock/${instName}/${pitch}.ogg`);
-    audio.volume = 0.5;
-    audio.play().catch(e => { /* Ignore errors if file missing in dev */ });
+function playPreview(inst, pitch) {
+    const name = INSTRUMENTS[inst];
+    new Audio(`noteblock/${name}/${pitch}.ogg`).play().catch(() => {});
 }
 
 /**
- * =========================================
- *  PLAYBACK LOGIC (Fixed)
- * =========================================
+ * Playback System (Fixed)
  */
-
 function play() {
-    if (isPlaying) return; // Prevent multiple loops
-    
+    if (isPlaying) return;
     isPlaying = true;
+    
     const speed = parseFloat(document.getElementById('speedInput').value) || 1.0;
-    const msPerTick = (1000 / CONFIG.ticksPerSecond) / speed;
+    const ms = (1000 / CONFIG.ticksPerSecond) / speed;
 
     playbackInterval = setInterval(() => {
         if (currentTick >= CONFIG.totalTicks) {
@@ -137,57 +112,48 @@ function play() {
 
         // Play notes
         const notes = songData.filter(n => n.tick === currentTick);
-        notes.forEach(n => playPreviewSound(n.inst, n.pitch));
+        notes.forEach(n => playPreview(n.inst, n.pitch));
 
-        // Update UI
-        updatePlayHead();
-        updateTimeDisplay();
-
+        updateUI();
         currentTick++;
-
-    }, msPerTick);
+    }, ms);
 }
 
 function pause() {
-    if (!isPlaying) return;
-    
     isPlaying = false;
-    if (playbackInterval) {
-        clearInterval(playbackInterval);
-        playbackInterval = null;
-    }
+    if (playbackInterval) clearInterval(playbackInterval);
 }
 
 function stop() {
-    pause(); // Stop interval first
+    pause();
     currentTick = 0;
-    updatePlayHead();
-    updateTimeDisplay();
+    updateUI();
 }
 
-function updatePlayHead() {
-    // 40px is key width, 35px is cell width
-    const leftPos = 40 + (currentTick * 35);
-    playHead.style.left = `${leftPos}px`;
-    
-    // Auto Scroll Logic
+function updateUI() {
+    // Move Playhead (40px offset)
+    const pos = 40 + (currentTick * 35);
+    playhead.style.left = `${pos}px`;
+
+    // Auto Scroll
     const viewport = document.querySelector('.sequencer-viewport');
-    if (leftPos > viewport.scrollLeft + viewport.clientWidth || leftPos < viewport.scrollLeft) {
-        viewport.scrollLeft = leftPos - 100;
+    if (pos > viewport.scrollLeft + viewport.clientWidth || pos < viewport.scrollLeft) {
+        viewport.scrollLeft = pos - 100;
     }
 
-    // Progress Bar
-    progressBar.value = (currentTick / CONFIG.totalTicks) * 100;
+    // Time & Progress
+    progress.value = (currentTick / CONFIG.totalTicks) * 100;
+    updateTime();
 }
 
-function updateTimeDisplay() {
-    const curSec = Math.floor(currentTick / 20);
-    const totSec = Math.floor(CONFIG.totalTicks / 20);
-    currentTimeEl.textContent = formatTime(curSec);
-    totalTimeEl.textContent = formatTime(totSec);
+function updateTime() {
+    const cur = Math.floor(currentTick / 20);
+    const tot = Math.floor(CONFIG.totalTicks / 20);
+    timeCurrent.innerText = fmt(cur);
+    timeTotal.innerText = fmt(tot);
 }
 
-function formatTime(s) {
+function fmt(s) {
     return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
 }
 
@@ -195,52 +161,46 @@ function formatTime(s) {
  * Listeners
  */
 function setupListeners() {
-    document.getElementById('playBtn').addEventListener('click', play);
-    document.getElementById('pauseBtn').addEventListener('click', pause);
-    document.getElementById('stopBtn').addEventListener('click', stop);
+    document.getElementById('playBtn').onclick = play;
+    document.getElementById('pauseBtn').onclick = pause;
+    document.getElementById('stopBtn').onclick = stop;
     
-    document.getElementById('instrumentSelect').addEventListener('change', (e) => {
-        selectedInstrument = parseInt(e.target.value);
-    });
-
-    // Scrubber
-    progressBar.addEventListener('input', (e) => {
+    document.getElementById('instrumentSelect').onchange = (e) => selectedInst = parseInt(e.target.value);
+    
+    progress.oninput = (e) => {
         const wasPlaying = isPlaying;
         if(wasPlaying) pause();
-        
         currentTick = Math.floor((e.target.value / 100) * CONFIG.totalTicks);
-        updatePlayHead();
-        updateTimeDisplay();
-        
+        updateUI();
         if(wasPlaying) play();
-    });
+    };
 
-    document.getElementById('downloadBtn').addEventListener('click', generateApiFile);
+    document.getElementById('downloadBtn').onclick = generateFile;
 }
 
 /**
- * =========================================
- *  API GENERATOR
- * =========================================
+ * FILE GENERATION
+ * Output: .js file (Text content renamed to .js)
  */
-function generateApiFile() {
-    const fileId = Math.floor(Math.random() * 900) + 100;
-    const filename = `music${fileId}.js`;
+function generateFile() {
+    const id = Math.floor(Math.random() * 900) + 100;
     const speed = document.getElementById('speedInput').value;
 
+    // Sort chronologically
     songData.sort((a, b) => a.tick - b.tick);
 
-    // Format: [tick, instrumentIndex, pitchIndex]
-    const dataString = songData.map(n => `[${n.tick},${n.inst},${n.pitch}]`).join(',');
+    // Build the string content
+    const dataStr = songData.map(n => `[${n.tick},${n.inst},${n.pitch}]`).join(',');
 
-    const fileContent = `/**
- * Bedrock Music API - Track ${fileId}
+    const content = `/**
+ * Bedrock Music API - Track ${id}
+ * Originally generated text, saved as JS module.
  */
-export const Music${fileId} = {
-    id: ${fileId},
+export const Music${id} = {
+    id: ${id},
     speed: ${speed},
     instruments: ["note.harp", "note.bass", "note.guitar", "note.banjo", "note.pling"],
-    data: [${dataString}],
+    data: [${dataStr}], // [tick, inst, pitch]
     getNotesAt(tick) {
         return this.data.filter(n => n[0] === tick).map(n => ({
             sound: this.instruments[n[1]],
@@ -249,17 +209,18 @@ export const Music${fileId} = {
     }
 };`;
 
-    download(filename, fileContent);
+    // Create Blob as text/plain to simulate "renaming txt to js"
+    // But force filename extension to .js
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `music${id}.js`; // Force extension here
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
-function download(filename, text) {
-    const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/javascript;charset=utf-8,' + encodeURIComponent(text));
-    element.setAttribute('download', filename);
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-}
-
-// Start
 init();
